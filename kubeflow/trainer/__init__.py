@@ -23,6 +23,9 @@ from kubeflow.trainer.backends.localprocess.types import LocalProcessBackendConf
 # Import the Kubeflow Trainer constants.
 from kubeflow.trainer.constants.constants import DATASET_PATH, MODEL_PATH  # noqa: F401
 
+# Import the Kubeflow Trainer logging utilities.
+from kubeflow.trainer.logging import get_logger, setup_logging  # noqa: F401
+
 # Import the Kubeflow Trainer types.
 from kubeflow.trainer.types.types import (
     BuiltinTrainer,
@@ -59,4 +62,6 @@ __all__ = [
     "TrainerType",
     "LocalProcessBackendConfig",
     "KubernetesBackendConfig",
+    "get_logger",
+    "setup_logging",
 ]
