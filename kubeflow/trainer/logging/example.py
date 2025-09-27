@@ -80,4 +80,3 @@ if __name__ == "__main__":
 
     print("\n=== JSON Logging Example ===")
     example_json_logging()
-

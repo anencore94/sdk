@@ -14,7 +14,7 @@
 
 """Custom log formatters for Kubeflow SDK."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import logging
 from typing import Optional
@@ -37,7 +37,7 @@ class StructuredFormatter(logging.Formatter):
             JSON formatted log string
         """
         log_entry = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
@@ -137,4 +137,3 @@ class ContextFormatter(logging.Formatter):
             record.context = "general"
 
         return super().format(record)
-

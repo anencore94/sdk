@@ -22,4 +22,3 @@ from .config import get_logger, setup_logging
 from .formatters import StructuredFormatter
 
 __all__ = ["get_logger", "setup_logging", "StructuredFormatter"]
-

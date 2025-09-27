@@ -12,4 +12,12 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import logging
+
+# Configure NullHandler for the kubeflow package to avoid logging noise
+# when users haven't configured logging. Users can override this by setting
+# their own logging configuration.
+logger = logging.getLogger(__name__)
+logger.addHandler(logging.NullHandler())
+
 __version__ = "0.1.0"
