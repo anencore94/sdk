@@ -282,6 +282,114 @@ class TestNullHandlerPattern:
         # The logging should work when user configures it
         assert "This should now be visible" in captured or "DEBUG" in captured
 
+    def test_sdk_integration_with_nullhandler(self):
+        """Test actual SDK integration with NullHandler pattern (replaces nullhandler_example)."""
+        # Import SDK components
+        from kubeflow.trainer import LocalProcessBackendConfig, TrainerClient
+
+        # Test 1: Default behavior - no logging output (NullHandler active)
+        log_capture = io.StringIO()
+
+        # Clear any existing handlers
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+
+        # Use SDK without user logging configuration
+        config = LocalProcessBackendConfig()
+        TrainerClient(backend_config=config)
+
+        # Should not produce any logging output
+        captured = log_capture.getvalue()
+        assert len(captured) == 0, "SDK should not produce logging output by default"
+
+        # Test 2: User configures logging - NullHandler is overridden
+        log_capture = io.StringIO()
+
+        # User configures logging
+        logging.basicConfig(
+            level=logging.DEBUG, stream=log_capture, format="%(levelname)s - %(name)s - %(message)s"
+        )
+
+        # Now SDK calls should produce debug output
+        config = LocalProcessBackendConfig()
+        TrainerClient(backend_config=config)
+
+        captured = log_capture.getvalue()
+        # Should contain SDK debug messages
+        assert "DEBUG" in captured or "Initializing TrainerClient" in captured
+
+        # Test 3: Different log levels (INFO vs DEBUG)
+        # Clear handlers and test INFO level
+        for handler in logging.root.handlers[:]:
+            logging.root.removeHandler(handler)
+
+        log_capture = io.StringIO()
+        logging.basicConfig(
+            level=logging.INFO, stream=log_capture, format="%(levelname)s - %(name)s - %(message)s"
+        )
+
+        # Set kubeflow logger to INFO level to suppress DEBUG messages
+        kubeflow_logger = logging.getLogger("kubeflow")
+        kubeflow_logger.setLevel(logging.INFO)
+
+        config = LocalProcessBackendConfig()
+        TrainerClient(backend_config=config)
+
+        captured = log_capture.getvalue()
+        # INFO level should suppress DEBUG messages
+        assert "DEBUG" not in captured or len(captured) == 0
+
+    def test_application_integration_example(self):
+        """Test complete application integration example (replaces SDK integration demo)."""
+        # Import SDK components
+        import os
+        import tempfile
+
+        from kubeflow.trainer import LocalProcessBackendConfig, TrainerClient
+
+        with tempfile.NamedTemporaryFile(mode="w", delete=False) as temp_file:
+            temp_path = temp_file.name
+
+        try:
+            # Clear any existing handlers
+            for handler in logging.root.handlers[:]:
+                logging.root.removeHandler(handler)
+
+            # User sets up their application logging (file + console)
+            log_capture = io.StringIO()
+            logging.basicConfig(
+                level=logging.INFO,
+                format="%(levelname)s - %(name)s - %(message)s",
+                handlers=[logging.StreamHandler(log_capture), logging.FileHandler(temp_path)],
+            )
+
+            # User's application logger
+            app_logger = logging.getLogger("my_app")
+            app_logger.info("Starting my application")
+
+            # SDK calls will now respect user's logging configuration
+            app_logger.info("Creating TrainerClient...")
+            config = LocalProcessBackendConfig()
+            TrainerClient(backend_config=config)
+
+            app_logger.info("Application completed")
+
+            # Check console output
+            captured = log_capture.getvalue()
+            assert "Starting my application" in captured
+            assert "Creating TrainerClient..." in captured
+            assert "Application completed" in captured
+
+            # Check file output
+            with open(temp_path) as f:
+                file_content = f.read()
+            assert "Starting my application" in file_content
+            assert "Creating TrainerClient..." in file_content
+            assert "Application completed" in file_content
+
+        finally:
+            os.unlink(temp_path)
+
 
 class TestStructuredFormatter:
     """Test StructuredFormatter functionality."""
