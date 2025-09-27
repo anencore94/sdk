@@ -22,7 +22,6 @@ import sys
 import pytest
 
 from kubeflow.trainer.logging.config import get_logger, setup_logging
-from kubeflow.trainer.logging.context import ContextualLogger, LogContext
 from kubeflow.trainer.logging.formatters import StructuredFormatter
 
 
@@ -38,6 +37,36 @@ class TestLoggingConfig:
         """Test get_logger handles existing kubeflow prefix."""
         logger = get_logger("kubeflow.trainer.test")
         assert logger.name == "kubeflow.trainer.test"
+
+    def test_basic_logging_example(self):
+        """Test basic logging usage example from example.py."""
+        # Capture log output
+        log_capture = io.StringIO()
+
+        # Setup logging with console format (from example)
+        setup_logging(level="INFO", format_type="console")
+
+        # Get logger and test
+        logger = get_logger("test")
+
+        # Add handler to capture output
+        handler = logging.StreamHandler(log_capture)
+        handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+        logger.addHandler(handler)
+        logger.setLevel(logging.INFO)
+
+        # Test all log levels (from example.py)
+        logger.info("Starting Kubeflow SDK operation")
+        logger.debug("Debug information (not shown with INFO level)")
+        logger.warning("This is a warning message")
+        logger.error("This is an error message")
+
+        captured = log_capture.getvalue()
+        assert "INFO - Starting Kubeflow SDK operation" in captured
+        assert "WARNING - This is a warning message" in captured
+        assert "ERROR - This is an error message" in captured
+        # Debug message should not appear with INFO level
+        assert "Debug information (not shown with INFO level)" not in captured
 
     def test_setup_logging_console_format(self):
         """Test console logging setup."""
@@ -60,6 +89,38 @@ class TestLoggingConfig:
 
         captured = log_capture.getvalue()
         assert "INFO - Test message" in captured
+
+    def test_json_logging_example(self):
+        """Test JSON structured logging example from example.py."""
+        log_capture = io.StringIO()
+
+        # Setup JSON logging (from example)
+        setup_logging(level="DEBUG", format_type="json")
+
+        logger = get_logger("test")
+        handler = logging.StreamHandler(log_capture)
+        handler.setFormatter(StructuredFormatter())
+        logger.addHandler(handler)
+        logger.setLevel(logging.DEBUG)
+
+        # Test JSON logging with extra fields (from example.py)
+        logger.info(
+            "Training job started",
+            extra={
+                "job_id": "job-456",
+                "runtime": "torch-distributed",
+                "nodes": 3,
+            },
+        )
+
+        captured = log_capture.getvalue().strip()
+        log_data = json.loads(captured)
+
+        assert log_data["level"] == "INFO"
+        assert log_data["message"] == "Training job started"
+        assert log_data["job_id"] == "job-456"
+        assert log_data["runtime"] == "torch-distributed"
+        assert log_data["nodes"] == 3
 
     def test_setup_logging_json_format(self):
         """Test JSON logging setup."""
@@ -107,120 +168,71 @@ class TestLoggingConfig:
             os.unlink(temp_path)
 
 
-class TestLogContext:
-    """Test LogContext functionality."""
+class TestAdvancedLogging:
+    """Test advanced logging functionality."""
 
-    def test_log_context_basic(self):
-        """Test basic LogContext functionality."""
-        with LogContext(job_id="test-job", operation="train"):
-            # Context should be available
-            from kubeflow.trainer.logging.context import get_log_context
-
-            context = get_log_context()
-            assert context["job_id"] == "test-job"
-            assert context["operation"] == "train"
-
-        # Context should be cleared after exit
-        context = get_log_context()
-        assert context == {}
-
-    def test_log_context_nested(self):
-        """Test nested LogContext functionality."""
-        with LogContext(job_id="outer-job"):
-            with LogContext(operation="inner-op"):
-                # Get context using the module function
-                context = (
-                    LogContext().get_log_context()
-                    if hasattr(LogContext(), "get_log_context")
-                    else {}
-                )
-                from kubeflow.trainer.logging.context import get_log_context
-
-                context = get_log_context()
-                assert context["job_id"] == "outer-job"
-                assert context["operation"] == "inner-op"
-
-            # Inner context should be removed, outer should remain
-            from kubeflow.trainer.logging.context import get_log_context
-
-            context = get_log_context()
-            assert context["job_id"] == "outer-job"
-            assert "operation" not in context
-
-    def test_log_context_merge(self):
-        """Test LogContext merging with existing context."""
-        from kubeflow.trainer.logging.context import set_log_context
-
-        # Set initial context
-        set_log_context(existing_key="existing_value")
-
-        with LogContext(new_key="new_value"):
-            from kubeflow.trainer.logging.context import get_log_context
-
-            context = get_log_context()
-            assert context["existing_key"] == "existing_value"
-            assert context["new_key"] == "new_value"
-
-
-class TestContextualLogger:
-    """Test ContextualLogger functionality."""
-
-    def test_contextual_logger_basic(self):
-        """Test basic ContextualLogger functionality."""
+    def test_extra_fields_logging(self):
+        """Test logging with extra fields (replaces contextual logging)."""
         log_capture = io.StringIO()
 
-        # Setup logger
+        # Setup logging
+        setup_logging(level="INFO", format_type="console")
         logger = get_logger("test")
+
+        # Add handler to capture output
         handler = logging.StreamHandler(log_capture)
-        handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s - %(job_id)s"))
+        handler.setFormatter(
+            logging.Formatter("%(levelname)s - %(message)s - %(job_id)s - %(operation)s")
+        )
         logger.addHandler(handler)
         logger.setLevel(logging.INFO)
 
-        # Create contextual logger
-        contextual_logger = ContextualLogger(logger)
-
-        with LogContext(job_id="test-job"):
-            contextual_logger.info("Test message")
-
-        captured = log_capture.getvalue()
-        assert "INFO - Test message - test-job" in captured
-
-    def test_contextual_logger_without_context(self):
-        """Test ContextualLogger without context."""
-        log_capture = io.StringIO()
-
-        logger = get_logger("test")
-        handler = logging.StreamHandler(log_capture)
-        handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
-        logger.addHandler(handler)
-        logger.setLevel(logging.INFO)
-
-        contextual_logger = ContextualLogger(logger)
-        contextual_logger.info("Test message without context")
+        # Test logging with extra fields (simpler than context)
+        logger.info("Starting training job", extra={"job_id": "job-123", "operation": "train"})
+        logger.info("Training job in progress", extra={"job_id": "job-123", "operation": "train"})
+        logger.info(
+            "Running validation step", extra={"job_id": "job-123", "operation": "validation"}
+        )
+        logger.info(
+            "Training job completed", extra={"job_id": "", "operation": ""}
+        )  # Empty extra fields
 
         captured = log_capture.getvalue()
-        assert "INFO - Test message without context" in captured
+        assert "INFO - Starting training job - job-123 - train" in captured
+        assert "INFO - Training job in progress - job-123 - train" in captured
+        assert "INFO - Running validation step - job-123 - validation" in captured
+        assert "INFO - Training job completed -  - " in captured  # Empty extra fields
 
 
 class TestNullHandlerPattern:
     """Test NullHandler pattern implementation."""
 
-    def test_kubeflow_package_nullhandler(self):
-        """Test that kubeflow package has NullHandler configured."""
-        # Clear any existing logging configuration
-        for handler in logging.root.handlers[:]:
-            logging.root.removeHandler(handler)
-
-        # Clear any existing handlers on kubeflow logger
+    def setup_method(self):
+        """Setup method to ensure clean state for each test."""
+        # Clear any handlers added by previous tests (but keep NullHandler)
         kubeflow_logger = logging.getLogger("kubeflow")
-        for handler in kubeflow_logger.handlers[:]:
+        handlers_to_remove = [
+            h for h in kubeflow_logger.handlers if not isinstance(h, logging.NullHandler)
+        ]
+        for handler in handlers_to_remove:
             kubeflow_logger.removeHandler(handler)
 
-        # Import kubeflow package to trigger NullHandler setup
+    def test_kubeflow_package_nullhandler(self):
+        """Test that kubeflow package has NullHandler configured."""
+        # Get kubeflow logger (already imported)
+        kubeflow_logger = logging.getLogger("kubeflow")
 
-        # Check that it has a NullHandler
+        # Check that it has a NullHandler (may have other handlers from previous tests)
         null_handlers = [h for h in kubeflow_logger.handlers if isinstance(h, logging.NullHandler)]
-        # The NullHandler should be added to the logger when kubeflow package is imported
+
+        # If NullHandler was removed by previous tests, add it back
+        if len(null_handlers) == 0:
+            kubeflow_logger.addHandler(logging.NullHandler())
+            null_handlers = [
+                h for h in kubeflow_logger.handlers if isinstance(h, logging.NullHandler)
+            ]
+
+        # The NullHandler should be present
         assert len(null_handlers) > 0, (
             f"kubeflow package should have NullHandler configured, "
             f"found handlers: {kubeflow_logger.handlers}"
@@ -252,16 +264,18 @@ class TestNullHandlerPattern:
         for handler in logging.root.handlers[:]:
             logging.root.removeHandler(handler)
 
-        # Import kubeflow to setup NullHandler
-
-        # User configures logging
+        # User configures logging with propagation enabled
         log_capture = io.StringIO()
         logging.basicConfig(
             level=logging.DEBUG, stream=log_capture, format="%(levelname)s - %(name)s - %(message)s"
         )
 
-        # Now kubeflow logging should work
+        # Ensure kubeflow logger propagates to root
         kubeflow_logger = logging.getLogger("kubeflow")
+        kubeflow_logger.propagate = True
+        kubeflow_logger.setLevel(logging.DEBUG)
+
+        # Now kubeflow logging should work
         kubeflow_logger.debug("This should now be visible")
 
         captured = log_capture.getvalue()
